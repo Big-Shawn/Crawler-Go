@@ -10,7 +10,8 @@ import (
 )
 
 //var profile []map[string]string
-var infoOutCh chan map[string]string
+//var infoOutCh chan map[string]string
+var infoPassCh chan string
 var wg sync.WaitGroup
 
 //var infoPassCh
@@ -27,53 +28,49 @@ func main() {
 	// 数据分离 - 拿到各个城市的连接地址
 	cityList := getCityList(pageRaw)
 
-	infoPassCh := make(chan string)
-	infoOutCh = make(chan map[string]string)
+	infoPassCh = make(chan string)
+	//infoOutCh = make(chan map[string]string)
 	// 启动进程池 -- 4 个 goroutine 去接收通道中
 	// 必须先对consumer 进行初始化，不然程序会被一直堵塞住
 	initPool(infoPassCh)
+	go producer(cityList)
+	wg.Wait()
 
-	for _, url := range cityList {
+	//todo: 将爬取到的信息写入一个文件中，并按照获取到的城市进行分类
+}
+
+func producer(list map[string]string) {
+	for _, url := range list {
 		infoPassCh <- url
 	}
 	close(infoPassCh)
-	close(infoOutCh)
-	//需要加一个进程同步 不然主进程会提前结束
-	wg.Wait()
-
-	// 根据链接地址去请求对应页面并拿到该城市下的第一页用户数据
-
-	//todo: 将爬取到的信息写入一个文件中，并按照获取到的城市进行分类
-	// todo: 把这个项目放到GitHub 然后形成提交记录
 }
 
-func infoOut() {
-	for val := range infoOutCh {
-		preety, err := json.MarshalIndent(val, "", "")
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("%s \n", preety)
-	}
-	wg.Done()
-}
+//func infoOut() {
+//	//defer wg.Done()
+//	for val := range infoOutCh {
+//		preety, err := json.MarshalIndent(val, "", "")
+//		if err != nil {
+//			panic(err)
+//		}
+//		fmt.Printf("%s \n", preety)
+//	}
+//}
 
 func initPool(in chan string) {
-
-	wg.Add(PoolSize + 1)
+	wg.Add(PoolSize)
 	for i := 0; i < PoolSize; i++ {
 		go crawlerWorker(in)
 	}
-	go infoOut()
+	//go infoOut()
 }
 
 func crawlerWorker(ch chan string) {
+	defer wg.Done()
 	for url := range ch {
 		pageRaw := crawlerBot(url)
 		getPersonProfile(pageRaw)
 	}
-	wg.Done()
-
 }
 
 func getPersonProfile(raw []byte) {
@@ -99,7 +96,13 @@ func profileIntegrate(attrs, NickName [][][]byte) {
 	}
 	personal["nickName"] = string(NickName[0][1])
 
-	infoOutCh <- personal
+	preety, err := json.MarshalIndent(personal, "", "")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%s \n", preety)
+
+	//infoOutCh <- personal
 	//profile = append(profile, personal)
 }
 
@@ -129,8 +132,6 @@ func getCityList(source []byte) map[string]string {
 		cityListMap[location] = url
 	}
 
-	//prettyJson, _ := json.MarshalIndent(cityListMap, "", "")
-	//fmt.Printf("%s", prettyJson)
 	return cityListMap
 }
 
@@ -145,21 +146,3 @@ func getRegexp(regExp string, search []byte) ([][][]byte, []string) {
 
 	return matches, groupName
 }
-
-//func getRegexpMap2(regExp string, search []byte) map[string][]byte {
-//	if len(search) < 1 {
-//		return map[string][]byte{}
-//	}
-//	re := regexp.MustCompile(regExp)
-//	matches := re.FindAllSubmatch(search, -1)
-//	groupName := re.SubexpNames()
-//	res := make(map[int]map[string][]byte)
-//
-//	for index, match := range matches {
-//		res[index]["url"] = match[1]
-//		res[index]["location"] = match[2]
-//	}
-//	//fmt.Println(res)
-//	//prettyRes, _ := json.MarshalIndent(result, "", "")
-//	return res
-//}
