@@ -29,18 +29,20 @@ func main() {
 
 	infoPassCh := make(chan string)
 	infoOutCh = make(chan map[string]string)
+	// 启动进程池 -- 4 个 goroutine 去接收通道中
+	// 必须先对consumer 进行初始化，不然程序会被一直堵塞住
+	initPool(infoPassCh)
+
 	for _, url := range cityList {
 		infoPassCh <- url
 	}
 	close(infoPassCh)
-	//close(infoOutCh)
-	wg.Wait()
+	close(infoOutCh)
 	//需要加一个进程同步 不然主进程会提前结束
+	wg.Wait()
 
 	// 根据链接地址去请求对应页面并拿到该城市下的第一页用户数据
 
-	// 启动进程池 -- 4 个 goroutine 去接收通道中
-	initPool(infoPassCh)
 	//todo: 将爬取到的信息写入一个文件中，并按照获取到的城市进行分类
 	// todo: 把这个项目放到GitHub 然后形成提交记录
 }
